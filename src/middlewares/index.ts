@@ -1,6 +1,9 @@
 import { NextFunction, Request, Response } from "express";
 import { verify } from "jsonwebtoken";
 import { assert, number, object, omit } from "superstruct";
+import { Cache } from "../cache";
+import { NoAceessError, UnauthorizedError } from "../errors";
+import { handleError } from "../utils";
 import { UserValidator } from "../validation";
 import { ACCESS_CONTROL_LIST } from "./access-control-listl";
 
@@ -10,24 +13,33 @@ export const middlewares = {
       const authHeader = req.headers["authorization"];
       const token = authHeader && authHeader.split(" ")[1];
       if (!token || !process.env.AUTH_PUBLIC_KEY) {
-        return res.sendStatus(401);
+        UnauthorizedError("You are not authorized");
+        return;
       }
 
       const decoded = verify(token, process.env.AUTH_PUBLIC_KEY);
 
       if (typeof decoded === "string" || !decoded.exp) {
-        return res.status(401).send({ message: "Invalid session" });
+        UnauthorizedError("Invalid session");
+        return;
       }
 
       const checkExpiry = Math.floor(Date.now() / 1000) - decoded.exp;
       if (checkExpiry >= 0) {
-        return res.status(401).send({ message: "Expired token" });
+        UnauthorizedError("Session token is expired");
+        return;
       }
 
+      if (
+        Cache.loggedOutSessionCache.has(`${decoded.username}_${decoded.iat}`)
+      ) {
+        UnauthorizedError("Session token is expired");
+        return;
+      }
       res.locals.decoded = decoded;
       next();
     } catch (error) {
-      return res.status(401).send();
+      handleError(error, res);
     }
   },
   hasAccess: (req: Request, res: Response, next: NextFunction) => {
@@ -55,18 +67,18 @@ export const middlewares = {
           exp: number(),
         })
       );
-      console.log(key, u1, u2);
+
       const role = res.locals.decoded.role;
       const access = ACCESS_CONTROL_LIST[key][role];
 
       if (!access) {
-        return res.status(403).send({ message: "Forbidden Access" });
+        NoAceessError("You do not have permission to this resource");
+        return;
       }
 
       next();
     } catch (error) {
-      console.error(error);
-      return res.status(403).send({});
+      handleError(error, res);
     }
   },
 };

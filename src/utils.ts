@@ -2,18 +2,24 @@ import { compare, hash } from "bcrypt";
 import { Response } from "express";
 import { sign } from "jsonwebtoken";
 import { StructError, coerce, create, number, string } from "superstruct";
+import { BadRequestError, BaseError, ServerError } from "./errors";
 
+export const TOKEN_EXPIRY_IN_HOURS = 24;
 export const isObject = (obj: unknown): obj is Object =>
   typeof obj === "object" && obj !== null && !Array.isArray(obj);
 
 export const handleError = (error: unknown, res: Response) => {
   if (error instanceof StructError) {
-    return res.status(400).send({ message: "Bad Request" });
-  } else if (error instanceof Error) {
-    return res.status(500).send({ messasge: error.message });
-  } else {
-    res.status(500);
+    BadRequestError("Bad Request");
+    return;
   }
+
+  if (error instanceof BaseError) {
+    return res.status(error.status).send({
+      message: error.message,
+    });
+  }
+  ServerError(null, res);
 };
 
 export const hashPassword = async (plain: string) => {
@@ -32,11 +38,12 @@ export const createJwtToken = (payload: unknown) => {
   }
 
   const privateKey = process.env.AUTH_PRIVATE_KEY;
+  const expiryInHours = `${TOKEN_EXPIRY_IN_HOURS ?? 24}h`;
   return (
     privateKey &&
     sign(payload, privateKey, {
       algorithm: "RS256",
-      expiresIn: "1d",
+      expiresIn: expiryInHours,
     })
   );
 };

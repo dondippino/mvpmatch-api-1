@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { assert, enums, pick } from "superstruct";
 import { prisma } from "../../prisma";
+import { NoAceessError, NotFoundError } from "../errors";
 import { coerceInteger, handleError, hashPassword } from "../utils";
 import { UserValidator } from "../validation";
 
@@ -40,7 +41,8 @@ export const deposit = async (req: Request, res: Response) => {
     const coercedId = coerceInteger(params.id);
 
     if (session.id !== coercedId) {
-      return res.status(403).send();
+      NoAceessError("You do not have access to this resource");
+      return;
     }
 
     const user = await prisma.user.update({
@@ -91,7 +93,8 @@ export const getSingle = async (req: Request, res: Response) => {
     const session = res.locals.decoded;
 
     if (session.id !== coercedId) {
-      return res.status(403).send();
+      NoAceessError("You do not have access to this resource");
+      return;
     }
 
     const user = await prisma.user.findUnique({
@@ -107,7 +110,8 @@ export const getSingle = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).send();
+      NotFoundError("User not found");
+      return;
     }
 
     res.send(user);
@@ -123,7 +127,8 @@ export const update = async (req: Request, res: Response) => {
     const session = res.locals.decoded;
 
     if (session.id !== coercedId) {
-      return res.status(403).send();
+      NoAceessError("You do not have access to this resource");
+      return;
     }
 
     assert(body, pick(UserValidator, ["role"]));
@@ -155,7 +160,8 @@ export const remove = async (req: Request, res: Response) => {
     const session = res.locals.decoded;
 
     if (session.id !== coercedId) {
-      return res.status(403).send();
+      NoAceessError("You do not have permission to this resource");
+      return;
     }
 
     const user = await prisma.user.delete({
@@ -181,7 +187,8 @@ export const reset = async (req: Request, res: Response) => {
     const session = res.locals.decoded;
 
     if (session.id !== coercedId) {
-      return res.status(403).send();
+      NoAceessError("You do not have permission to this resource");
+      return;
     }
 
     const user = await prisma.user.update({

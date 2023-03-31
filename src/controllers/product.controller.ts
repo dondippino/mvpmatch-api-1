@@ -1,6 +1,12 @@
 import { Request, Response } from "express";
 import { assert, number, object, partial, pick } from "superstruct";
 import { prisma } from "../../prisma";
+import {
+  BadRequestError,
+  NoAceessError,
+  NotFoundError,
+  ServerError,
+} from "../errors";
 import { coerceInteger, handleError, prepareBalance } from "../utils";
 import { ProductValidator } from "../validation";
 
@@ -41,11 +47,13 @@ export const buy = async (req: Request, res: Response) => {
       });
 
       if (!user) {
-        throw new Error(`User not found`);
+        NotFoundError("User not found");
+        return;
       }
 
       if (user.deposit === 0) {
-        throw new Error("User has no deposit");
+        ServerError("User has no deposit");
+        return;
       }
 
       const product = await tx.product.findUnique({
@@ -55,18 +63,21 @@ export const buy = async (req: Request, res: Response) => {
       });
 
       if (!product) {
-        throw new Error(`Product with id ${body.productId} does not exist`);
+        ServerError(`Product with id ${body.productId} does not exist`);
+        return;
       }
 
       if (product.amountAvailable === 0) {
-        throw new Error(`Product is out of stock`);
+        NotFoundError("Product is out of stock");
+        return;
       }
 
       const costOfProductNeededByBuyer = body.amount * product.cost;
       const costOfProductAvailable = product.amountAvailable * product.cost;
 
       if (user.deposit < costOfProductNeededByBuyer) {
-        throw new Error("Insufficient coins to purchase product");
+        ServerError("Insufficient coins to purchase product");
+        return;
       }
 
       const balance = costOfProductAvailable - costOfProductNeededByBuyer;
@@ -148,7 +159,8 @@ export const update = async (req: Request, res: Response) => {
     );
 
     if (Object.keys(body).length === 0) {
-      return res.status(400).send();
+      BadRequestError("Invalid Parameters");
+      return;
     }
 
     const session = res.locals.decoded;
@@ -157,7 +169,8 @@ export const update = async (req: Request, res: Response) => {
     });
 
     if (!productView || session.id !== productView.sellerId) {
-      return res.status(403).send();
+      NoAceessError("You do not have access to this resource");
+      return;
     }
 
     const product = await prisma.product.update({
@@ -185,7 +198,8 @@ export const remove = async (req: Request, res: Response) => {
     });
 
     if (!productView || productView.sellerId !== session.id) {
-      return res.status(403).send();
+      NoAceessError("You do not have access to this resource");
+      return;
     }
 
     const product = await prisma.product.delete({
