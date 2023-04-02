@@ -3,7 +3,7 @@ import { assert, number, object, partial, pick } from "superstruct";
 import { prisma } from "../../prisma";
 import {
   BadRequestError,
-  NoAceessError,
+  NoAccessError,
   NotFoundError,
   ServerError,
 } from "../errors";
@@ -15,7 +15,8 @@ export const create = async (req: Request, res: Response) => {
     const { body } = req;
     assert(
       body,
-      pick(ProductValidator, ["amountAvailable", "cost", "productName"])
+      pick(ProductValidator, ["amountAvailable", "cost", "productName"]),
+      "Invalid paramaters to create a product"
     );
     const session = res.locals.decoded;
 
@@ -38,80 +39,93 @@ export const buy = async (req: Request, res: Response) => {
   try {
     const { body } = req;
     const session = res.locals.decoded;
-    assert(body, object({ productId: number(), amount: number() }));
-    await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({
-        where: {
-          id: session.id,
-        },
-      });
+    assert(
+      body,
+      object({ productId: number(), amount: number() }),
+      "Invalid parameters, kindly check the productId and the amount"
+    );
 
-      if (!user) {
-        NotFoundError("User not found");
-        return;
-      }
-
-      if (user.deposit === 0) {
-        ServerError("User has no deposit");
-        return;
-      }
-
-      const product = await tx.product.findUnique({
-        where: {
-          id: body.productId,
-        },
-      });
-
-      if (!product) {
-        ServerError(`Product with id ${body.productId} does not exist`);
-        return;
-      }
-
-      if (product.amountAvailable === 0) {
-        NotFoundError("Product is out of stock");
-        return;
-      }
-
-      const costOfProductNeededByBuyer = body.amount * product.cost;
-      const costOfProductAvailable = product.amountAvailable * product.cost;
-
-      if (user.deposit < costOfProductNeededByBuyer) {
-        ServerError("Insufficient coins to purchase product");
-        return;
-      }
-
-      const balance = costOfProductAvailable - costOfProductNeededByBuyer;
-      const productSold = balance < 0 ? product.amountAvailable : body.amount;
-      const coinsSpent =
-        balance < 0 ? costOfProductAvailable : costOfProductNeededByBuyer;
-
-      await tx.product.update({
-        where: {
-          id: body.productId,
-        },
-        data: {
-          amountAvailable: { decrement: productSold },
-        },
-      });
-
-      await tx.user.update({
-        where: {
-          id: session.id,
-        },
-        data: {
-          deposit: {
-            decrement: coinsSpent,
+    const { change, coinsSpent, product } = await prisma
+      .$transaction(async (tx) => {
+        const user = await tx.user.findUnique({
+          where: {
+            id: session.id,
           },
-        },
+        });
+
+        if (!user) {
+          throw new NotFoundError("User not found");
+        }
+
+        if (user.deposit === 0) {
+          throw new ServerError("User has no deposit");
+        }
+
+        const product = await tx.product.findUnique({
+          where: {
+            id: body.productId,
+          },
+        });
+
+        if (!product) {
+          throw new NotFoundError(
+            `Product with id ${body.productId} does not exist`
+          );
+        }
+
+        if (product.amountAvailable === 0) {
+          throw new NotFoundError("Product is out of stock");
+        }
+
+        const costOfProductNeededByBuyer = body.amount * product.cost;
+        const costOfProductAvailable = product.amountAvailable * product.cost;
+
+        if (user.deposit < costOfProductNeededByBuyer) {
+          throw new ServerError("Insufficient coins to purchase product");
+        }
+
+        const balance = costOfProductAvailable - costOfProductNeededByBuyer;
+        const productSold = balance < 0 ? product.amountAvailable : body.amount;
+        const coinsSpent =
+          balance < 0 ? costOfProductAvailable : costOfProductNeededByBuyer;
+
+        await tx.product.update({
+          where: {
+            id: body.productId,
+          },
+          data: {
+            amountAvailable: { decrement: productSold },
+          },
+        });
+
+        await tx.user.update({
+          where: {
+            id: session.id,
+          },
+          data: {
+            deposit: {
+              decrement: coinsSpent,
+            },
+          },
+        });
+
+        const change = balance < 0 ? prepareBalance(Math.abs(balance)) : 0;
+
+        return {
+          coinsSpent,
+          product,
+          change,
+        };
+      })
+      .catch((err) => {
+        throw err;
       });
 
-      const change = balance < 0 ? prepareBalance(Math.abs(balance)) : 0;
-      res.send({
-        total: coinsSpent,
-        product: product.productName,
-        productId: product.id,
-        change: change,
-      });
+    res.send({
+      total: coinsSpent,
+      product: product.productName,
+      productId: product.id,
+      change: change,
     });
   } catch (error) {
     handleError(error, res);
@@ -150,17 +164,18 @@ export const getSingle = async (req: Request, res: Response) => {
 export const update = async (req: Request, res: Response) => {
   try {
     const { body, params } = req;
+
     const coercedId = coerceInteger(params.id);
     assert(
       body,
       partial(
         pick(ProductValidator, ["amountAvailable", "cost", "productName"])
-      )
+      ),
+      "Invalid parameters to update product "
     );
 
     if (Object.keys(body).length === 0) {
-      BadRequestError("Invalid Parameters");
-      return;
+      throw new BadRequestError("Invalid Parameters");
     }
 
     const session = res.locals.decoded;
@@ -169,8 +184,7 @@ export const update = async (req: Request, res: Response) => {
     });
 
     if (!productView || session.id !== productView.sellerId) {
-      NoAceessError("You do not have access to this resource");
-      return;
+      throw new NoAccessError("You do not have access to this resource");
     }
 
     const product = await prisma.product.update({
@@ -198,8 +212,7 @@ export const remove = async (req: Request, res: Response) => {
     });
 
     if (!productView || productView.sellerId !== session.id) {
-      NoAceessError("You do not have access to this resource");
-      return;
+      throw new NoAccessError("You do not have access to this resource");
     }
 
     const product = await prisma.product.delete({

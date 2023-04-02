@@ -2,7 +2,7 @@ import { compare, hash } from "bcrypt";
 import { Response } from "express";
 import { sign } from "jsonwebtoken";
 import { StructError, coerce, create, number, string } from "superstruct";
-import { BadRequestError, BaseError, ServerError } from "./errors";
+import { BaseError } from "./errors";
 
 export const TOKEN_EXPIRY_IN_HOURS = 24;
 export const isObject = (obj: unknown): obj is Object =>
@@ -10,8 +10,9 @@ export const isObject = (obj: unknown): obj is Object =>
 
 export const handleError = (error: unknown, res: Response) => {
   if (error instanceof StructError) {
-    BadRequestError("Bad Request");
-    return;
+    return res.status(400).send({
+      message: error.message ?? "Invalid Parameters",
+    });
   }
 
   if (error instanceof BaseError) {
@@ -19,7 +20,10 @@ export const handleError = (error: unknown, res: Response) => {
       message: error.message,
     });
   }
-  ServerError(null, res);
+
+  return res.status(500).send({
+    message: "Server Error",
+  });
 };
 
 export const hashPassword = async (plain: string) => {
@@ -50,7 +54,7 @@ export const createJwtToken = (payload: unknown) => {
 
 const IdInteger = coerce(number(), string(), (value) => parseInt(value));
 
-export const coerceInteger = (unknownNumber: unknown) =>
+export const coerceInteger = (unknownNumber: string) =>
   create(unknownNumber, IdInteger);
 
 export const prepareBalance = (

@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { verify } from "jsonwebtoken";
 import { assert, number, object, omit } from "superstruct";
 import { Cache } from "../cache";
-import { NoAceessError, UnauthorizedError } from "../errors";
+import { NoAccessError, UnauthorizedError } from "../errors";
 import { handleError } from "../utils";
 import { UserValidator } from "../validation";
 import { ACCESS_CONTROL_LIST } from "./access-control-listl";
@@ -13,33 +13,29 @@ export const middlewares = {
       const authHeader = req.headers["authorization"];
       const token = authHeader && authHeader.split(" ")[1];
       if (!token || !process.env.AUTH_PUBLIC_KEY) {
-        UnauthorizedError("You are not authorized");
-        return;
+        throw new UnauthorizedError("You are not authorized");
       }
 
       const decoded = verify(token, process.env.AUTH_PUBLIC_KEY);
 
       if (typeof decoded === "string" || !decoded.exp) {
-        UnauthorizedError("Invalid session");
-        return;
+        throw new UnauthorizedError("Invalid session");
       }
 
       const checkExpiry = Math.floor(Date.now() / 1000) - decoded.exp;
       if (checkExpiry >= 0) {
-        UnauthorizedError("Session token is expired");
-        return;
+        throw new UnauthorizedError("Session token is expired");
       }
 
       if (
         Cache.loggedOutSessionCache.has(`${decoded.username}_${decoded.iat}`)
       ) {
-        UnauthorizedError("Session token is expired");
-        return;
+        throw new UnauthorizedError("Session token is expired");
       }
       res.locals.decoded = decoded;
       next();
     } catch (error) {
-      handleError(error, res);
+      handleError(new UnauthorizedError(error.message), res);
     }
   },
   hasAccess: (req: Request, res: Response, next: NextFunction) => {
@@ -72,8 +68,7 @@ export const middlewares = {
       const access = ACCESS_CONTROL_LIST[key][role];
 
       if (!access) {
-        NoAceessError("You do not have permission to this resource");
-        return;
+        throw new NoAccessError("You do not have permission to this resource");
       }
 
       next();

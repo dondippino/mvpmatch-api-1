@@ -1,14 +1,18 @@
 import { Request, Response } from "express";
 import { assert, enums, pick } from "superstruct";
 import { prisma } from "../../prisma";
-import { NoAceessError, NotFoundError } from "../errors";
+import { NoAccessError, NotFoundError } from "../errors";
 import { coerceInteger, handleError, hashPassword } from "../utils";
 import { UserValidator } from "../validation";
 
 export const create = async (req: Request, res: Response) => {
   try {
     const { body } = req;
-    assert(body, pick(UserValidator, ["username", "password", "role"]));
+    assert(
+      body,
+      pick(UserValidator, ["username", "password", "role"]),
+      "Invalid parmaters to create a user"
+    );
     const hashedPassword = await hashPassword(body.password);
     const user = await prisma.user.create({
       data: {
@@ -31,19 +35,21 @@ export const create = async (req: Request, res: Response) => {
 
 export const deposit = async (req: Request, res: Response) => {
   try {
-    const { body, params } = req;
-    assert(body, pick(UserValidator, ["deposit"]));
+    const { body } = req;
+    assert(
+      body,
+      pick(UserValidator, ["deposit"]),
+      "Deposit is required and must be a number"
+    );
 
     const { deposit } = body;
-    assert(deposit, enums([5, 10, 20, 50, 100]));
+    assert(
+      deposit,
+      enums([5, 10, 20, 50, 100]),
+      "Invalid amount, value should be 5, 10, 20, 50 or 100"
+    );
 
     const session = res.locals.decoded;
-    const coercedId = coerceInteger(params.id);
-
-    if (session.id !== coercedId) {
-      NoAceessError("You do not have access to this resource");
-      return;
-    }
 
     const user = await prisma.user.update({
       where: {
@@ -93,8 +99,7 @@ export const getSingle = async (req: Request, res: Response) => {
     const session = res.locals.decoded;
 
     if (session.id !== coercedId) {
-      NoAceessError("You do not have access to this resource");
-      return;
+      throw new NoAccessError("You do not have access to this resource");
     }
 
     const user = await prisma.user.findUnique({
@@ -110,8 +115,7 @@ export const getSingle = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      NotFoundError("User not found");
-      return;
+      throw new NotFoundError("User not found");
     }
 
     res.send(user);
@@ -127,11 +131,14 @@ export const update = async (req: Request, res: Response) => {
     const session = res.locals.decoded;
 
     if (session.id !== coercedId) {
-      NoAceessError("You do not have access to this resource");
-      return;
+      throw new NoAccessError("You do not have access to this resource");
     }
 
-    assert(body, pick(UserValidator, ["role"]));
+    assert(
+      body,
+      pick(UserValidator, ["role"]),
+      "Role is required and must be either 'BUYER' or 'SELLER'"
+    );
     const user = await prisma.user.update({
       where: {
         id: coercedId,
@@ -160,8 +167,7 @@ export const remove = async (req: Request, res: Response) => {
     const session = res.locals.decoded;
 
     if (session.id !== coercedId) {
-      NoAceessError("You do not have permission to this resource");
-      return;
+      throw new NoAccessError("You do not have permission to this resource");
     }
 
     const user = await prisma.user.delete({
@@ -182,14 +188,7 @@ export const remove = async (req: Request, res: Response) => {
 
 export const reset = async (req: Request, res: Response) => {
   try {
-    const { params } = req;
-    const coercedId = coerceInteger(params.id);
     const session = res.locals.decoded;
-
-    if (session.id !== coercedId) {
-      NoAceessError("You do not have permission to this resource");
-      return;
-    }
 
     const user = await prisma.user.update({
       where: {

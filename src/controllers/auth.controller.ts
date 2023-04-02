@@ -3,17 +3,22 @@ import { verify } from "jsonwebtoken";
 import { assert, pick } from "superstruct";
 import { prisma } from "../../prisma";
 import { Cache } from "../cache";
-import { NoAceessError, UnauthorizedError } from "../errors";
+import { NoAccessError, UnauthorizedError } from "../errors";
 import { comparePassword, createJwtToken, handleError } from "../utils";
 import { UserValidator } from "../validation";
 
 export const signIn = async (req: Request, res: Response) => {
   try {
     const body = req.body;
-    assert(body, pick(UserValidator, ["username", "password"]));
+    assert(
+      body,
+      pick(UserValidator, ["username", "password"]),
+      "Invalid credentials"
+    );
     if (Cache.liveSessionCache.has(body.username)) {
-      NoAceessError("There is already an active session using your account");
-      return;
+      throw new NoAccessError(
+        "There is already an active session using your account"
+      );
     }
 
     const user = await prisma.user.findUnique({
@@ -23,8 +28,7 @@ export const signIn = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      UnauthorizedError("Invalid credentials");
-      return;
+      throw new UnauthorizedError("Invalid credentials");
     }
 
     const { password, ...userObject } = user;
@@ -34,7 +38,7 @@ export const signIn = async (req: Request, res: Response) => {
     );
 
     if (!isUserAuthenticated) {
-      return UnauthorizedError("Invalid credentials");
+      throw new UnauthorizedError("Invalid credentials");
     }
 
     const token = createJwtToken(userObject);
@@ -56,7 +60,11 @@ export const signIn = async (req: Request, res: Response) => {
 export const logoutAll = async (req: Request, res: Response) => {
   try {
     const body = req.body;
-    assert(body, pick(UserValidator, ["username", "password"]));
+    assert(
+      body,
+      pick(UserValidator, ["username", "password"]),
+      "Invalid credentials"
+    );
 
     const user = await prisma.user.findUnique({
       where: {
@@ -65,9 +73,13 @@ export const logoutAll = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      UnauthorizedError("Not Authorized");
-      return;
+      throw new UnauthorizedError("Not Authorized");
     }
+
+    if (!(await comparePassword(body.password, user.password))) {
+      throw new UnauthorizedError("Not Authorized");
+    }
+
     if (Cache.liveSessionCache.has(user.username, { updateAgeOnHas: false })) {
       const u = Cache.liveSessionCache.get(user.username, {
         updateAgeOnGet: false,
@@ -76,7 +88,7 @@ export const logoutAll = async (req: Request, res: Response) => {
       Cache.liveSessionCache.delete(user.username);
       return res.send();
     }
-    throw new Error();
+    throw new NoAccessError("All sessions have already been logged out");
   } catch (error) {
     handleError(error, res);
   }
