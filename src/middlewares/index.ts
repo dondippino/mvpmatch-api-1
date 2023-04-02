@@ -8,36 +8,46 @@ import { UserValidator } from "../validation";
 import { ACCESS_CONTROL_LIST } from "./access-control-listl";
 
 export const middlewares = {
+  // Veriy JWT on every request
   verifyToken: (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Extract token from the header
       const authHeader = req.headers["authorization"];
       const token = authHeader && authHeader.split(" ")[1];
       if (!token || !process.env.AUTH_PUBLIC_KEY) {
         throw new UnauthorizedError("You are not authorized");
       }
 
+      // Decode the token
       const decoded = verify(token, process.env.AUTH_PUBLIC_KEY);
 
+      // If token is not of the right type or does not have expiry time, throw error
       if (typeof decoded === "string" || !decoded.exp) {
         throw new UnauthorizedError("Invalid session");
       }
 
+      // Check the expiry time of token,
+      // it throws an error if token has expired
       const checkExpiry = Math.floor(Date.now() / 1000) - decoded.exp;
       if (checkExpiry >= 0) {
         throw new UnauthorizedError("Session token is expired");
       }
 
+      // Check to see if this particular user session has not been logged out by 'logOuttAll'
+      // if so, an error is thrown
       if (
         Cache.loggedOutSessionCache.has(`${decoded.username}_${decoded.iat}`)
       ) {
         throw new UnauthorizedError("Session token is expired");
       }
+
       res.locals.decoded = decoded;
       next();
     } catch (error) {
       handleError(new UnauthorizedError(error.message), res);
     }
   },
+  // Enforces Role Based Acces Control (RBAC) on each request
   hasAccess: (req: Request, res: Response, next: NextFunction) => {
     try {
       const { method, baseUrl, route } = req;
@@ -67,6 +77,7 @@ export const middlewares = {
       const role = res.locals.decoded.role;
       const access = ACCESS_CONTROL_LIST[key][role];
 
+      // If user role does not have the premission to this resource, an error is thrown
       if (!access) {
         throw new NoAccessError("You do not have permission to this resource");
       }
