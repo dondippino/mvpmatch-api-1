@@ -1,4 +1,4 @@
-# MVPMAtch Product API
+# MVPMatch Product API
 
 ## Installation
 
@@ -16,3 +16,7 @@
 ## Testing
 
 - Run Unit Tests with `npm run test`
+
+## Postman Collection file
+
+- Postman collection file 'MVPMatch.postman_collection.json' is included in the root of the project
