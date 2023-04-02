@@ -5,6 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "start:dev": "nodemon --watch './**/*.ts' --exec 'ts-node' src/index.ts",
+    "start": "nodemon src/index.ts",
     "test": "NODE_ENV=test jest -i"
   },
   "keywords": [],
