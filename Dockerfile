@@ -13,8 +13,12 @@ RUN npm install
 # Copy the rest of project files into this image
 COPY . .
 
+RUN awk -v ORS='\\n' '1'  .env > .env
+
 # Expose application port
 EXPOSE 5090
 
 # Start the application
 CMD npm run start
+
+ENTRYPOINT ["sh", "-c", "set -a; . .env; set +a"]

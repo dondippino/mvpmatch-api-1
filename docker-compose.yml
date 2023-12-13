@@ -2,7 +2,7 @@ version: "3.7"
 
 services:
   app:
-    image: registry.gitlab.com/olabosindeoladipo/product-app/app
+    image: dondippino/gea-demo:app
     build:
       context: .
       dockerfile: Dockerfile
@@ -14,7 +14,7 @@ services:
       - jenkins
 
   jenkins-master:
-    image: registry.gitlab.com/olabosindeoladipo/product-app/devops_jenkins_master
+    image: dondippino/gea-demo:devops_jenkins_master
     build:
       context: jenkins
       dockerfile: Dockerfile
@@ -36,7 +36,7 @@ services:
       - jenkins
 
   jenkins-agent:
-    image: registry.gitlab.com/olabosindeoladipo/product-app/devops_jenkins_agent
+    image: dondippino/gea-demo:devops_jenkins_agent
     build:
       context: jenkins
       dockerfile: Dockerfile_agent
