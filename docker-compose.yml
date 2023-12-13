@@ -1,0 +1,57 @@
+version: "3.7"
+
+services:
+  app:
+    image: dondippino/gea-demo:app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8999:8999"
+    volumes:
+      - .:/var/www/html
+    networks:
+      - jenkins
+
+  jenkins-master:
+    image: dondippino/gea-demo:devops_jenkins_master
+    build:
+      context: jenkins
+      dockerfile: Dockerfile
+    user: root
+    ports:
+      - "8181:8080"
+      - "50000:50000"
+    environment:
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_CERT_PATH=/certs/client
+      - DOCKER_TLS_VERIFY=1
+    volumes:
+      - "./jenkins/jenkins-data:/var/jenkins_home"
+      - "./jenkins/jenkins-docker-certs:/certs/client:ro"
+    restart: always
+    depends_on:
+      - jenkins-agent
+    networks:
+      - jenkins
+
+  jenkins-agent:
+    image: dondippino/gea-demo:devops_jenkins_agent
+    build:
+      context: jenkins
+      dockerfile: Dockerfile_agent
+
+  socat:
+    image: alpine/socat
+    networks:
+      - jenkins
+    ports:
+      - "2376:2375"
+    command: "tcp-listen:2375,fork,reuseaddr unix-connect:/var/run/docker.sock"
+
+    restart: always
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+networks:
+  jenkins:
