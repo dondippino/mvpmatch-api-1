@@ -1,7 +1,7 @@
 pipeline{
     agent docker-agent-node-alpine
     stages{
-        stage{"test"}{
+        stage("test"){
             step{
 
             }
