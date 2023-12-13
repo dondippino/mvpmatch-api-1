@@ -2,7 +2,10 @@ version: "3.7"
 
 services:
   app:
-    build: ./app
+    image: registry.gitlab.com/olabosindeoladipo/product-app/app
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8999:8999"
     volumes:
@@ -11,6 +14,7 @@ services:
       - jenkins
 
   jenkins-master:
+    image: registry.gitlab.com/olabosindeoladipo/product-app/devops_jenkins_master
     build:
       context: jenkins
       dockerfile: Dockerfile
@@ -32,17 +36,10 @@ services:
       - jenkins
 
   jenkins-agent:
-    image: localhost:5000/devops_jenkins_agent
+    image: registry.gitlab.com/olabosindeoladipo/product-app/devops_jenkins_agent
     build:
       context: jenkins
       dockerfile: Dockerfile_agent
-
-  ssh-keys:
-    build:
-      context: keygen
-      dockerfile: Dockerfile
-    volumes:
-      - "./ssh-keys:/root/.ssh"
 
   socat:
     image: alpine/socat
