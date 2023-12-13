@@ -1,16 +1,24 @@
-pipeline{
+pipeline {
     agent { 
-                label "docker-agent-node-alpine"
-            }
-    stages{
-        stage("test"){
-            step{
+        label "docker-agent-node-alpine"
+    }
 
+    stages {
+        stage("test") {
+            steps {
+                script {
+                    echo 'Running tests...'
+                    // Add your test steps here
+                }
             }
         }
-        stage("build"){
-            step{
 
+        stage("build") {
+            steps {
+                script {
+                    echo 'Building...'
+                    // Add your build steps here
+                }
             }
         }
     }
